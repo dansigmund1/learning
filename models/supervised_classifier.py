@@ -6,15 +6,16 @@ import pandas as pd
 class SupervisedClassifier:
     def __init__(self, data):
         self.data = data
-    def make_quality_features(df):
-        features = pd.DataFrame(index=df.index)
-        # fraction of missing values in the row
-        features["missing_rate"] = df.isnull().mean(axis=1)
-        # number of out‑of‑range values (example: age between 0 and 120)
-        if "age" in df.columns:
-            features["age_outlier"] = ((df["age"] < 0) | (df["age"] > 120)).astype(int)
-        # add more rules as needed
-        return features
+        
+    # def make_quality_features(df):
+    #     features = pd.DataFrame(index=df.index)
+    #     # fraction of missing values in the row
+    #     features["missing_rate"] = df.isnull().mean(axis=1)
+    #     # number of out‑of‑range values (example: age between 0 and 120)
+    #     if "age" in df.columns:
+    #         features["age_outlier"] = ((df["age"] < 0) | (df["age"] > 120)).astype(int)
+    #     # add more rules as needed
+    #     return features
 
     X = make_quality_features(df)  # your features
     y = df["is_bad"]               # 0/1 labels you defined
