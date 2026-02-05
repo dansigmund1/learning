@@ -1,84 +1,84 @@
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torchvision import datasets, transforms, models
-from torch.utils.data import DataLoader
-from PIL import Image
-import os
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import IsolationForest
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+import argparse
+import pandas as pd
+import numpy as np
 
-# Config
-DATA_DIR = "data"
-BATCH_SIZE = 32
-EPOCHS = 5
-LR = 1e-3
-IMG_SIZE = 224
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+# ############################## SupervisedClassifier Model ##############################
 
-# Transforms
-transform = transforms.Compose([
-    transforms.Resize((IMG_SIZE, IMG_SIZE)),
-    transforms.RandomHorizontalFlip(),
-    transforms.ToTensor(),
-    transforms.Normalize(
-        mean=[0.485,0.456,0.406],
-        std=[0.229,0.224,0.225]
-    )
-])
+class SupervisedClassifier:
+    def __init__(self, data):
+        self.data = data
+    def make_quality_features(df):
+        features = pd.DataFrame(index=df.index)
+        # fraction of missing values in the row
+        features["missing_rate"] = df.isnull().mean(axis=1)
+        # number of out‑of‑range values (example: age between 0 and 120)
+        if "age" in df.columns:
+            features["age_outlier"] = ((df["age"] < 0) | (df["age"] > 120)).astype(int)
+        # add more rules as needed
+        return features
 
-# Datasets and Loaders
-train_ds = datasets.ImageFolder(os.path.join(DATA_DIR, "train"), transform=transform)
-val_ds = datasets.ImageFolder(os.path.join(DATA_DIR, "val"), transform=transform)
+    X = make_quality_features(df)  # your features
+    y = df["is_bad"]               # 0/1 labels you defined
 
-train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
-val_loader = DataLoader(val_ds, batch_size=BATCH_SIZE)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
-class_names = train_ds.classes
-num_classes = len(class_names)
+    model = RandomForestClassifier()
+    model.fit(X_train, y_train)
+    preds = model.predict(X_test)
+    print(classification_report(y_test, preds))
 
-# Model
-model = models.resnet50(pretrained=True)
-    # Freeze backbone
-for param in model.parameters():
-    param.requires_grad = False
-    # Replace classifier
-    model.fc = nn.Linear(model.fc.in_features, num_classes)
-    model.to(DEVICE)
+    def check_data_quality(df, model, feature_func):
+        X = feature_func(df)
+        scores = model.predict_proba(X)[:, 1]  # probability of being bad
+        return scores
 
-# Loss Optimizer
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.fc.parameters(), lr=LR)
+    quality_scores = check_data_quality(new_df, model, make_quality_features)
+    new_df["quality_score"] = quality_scores
 
-# Training Loop
-for epoch in range(EPOCHS):
-    model.train()
-    running_loss = 0
+# ############################## UnsupervisedAnomalyDetection Model ##############################
 
-    for images, labels in train_loader:
-        images, labels = images.to(DEVICE), labels.to(DEVICE)
+class UnsupervisedAnomalyDetection:
+    def __init__(self, data):
+        self.data = data
 
-        optimizer.zero_grad()
-        outputs = model(images)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
-        running_loss += loss.items()
+    def make_quality_features(df):
+        features = pd.DataFrame(index=df.index)
+        # fraction of missing values in the row
+        features["missing_rate"] = df.isnull().mean(axis=1)
+        # number of out‑of‑range values (example: age between 0 and 120)
+        if "age" in df.columns:
+            features["age_outlier"] = ((df["age"] < 0) | (df["age"] > 120)).astype(int)
+        # add more rules as needed
+        return features
 
-    avg_loss = running_loss/len(train_loader)
-    print(f"Epoch [{epoch+1}/{EPOCHS}] - Loss: {avg_loss:.4f}")
+    X = make_quality_features(df).dropna()  # numeric features only
+    anomaly_model = IsolationForest(contamination=0.05)  # assume ~5% anomalies
+    anomaly_model.fit(X)
 
-# Save Model
-torch.save(model.state_dict(), "city_skyline_model.pth")
-print("Model Saved!")
+    df["anomaly_score"] = anomaly_model.predict(X)  # -1 = anomaly, 1 = normal
+    df["is_bad"] = (df["anomaly_score"] == -1).astype(int)
 
-# Single Image Prediction
-def predict_image(image_path):
-    model.eval()
-    image = Image.open(image_path).convert("RGB")
-    image = transform(image).unsqueeze(0).to(DEVICE)
+    def check_data_quality(df, model, feature_func):
+        X = feature_func(df)
+        scores = model.predict_proba(X)[:, 1]  # probability of being bad
+        return scores
 
-    with torch.no_grad():
-        outputs = model(image)
-        probs = torch.softmax(outputs, dim=1)
-        idx = probs.argmax(1).item()
+    quality_scores = check_data_quality(new_df, model, make_quality_features)
+    new_df["quality_score"] = quality_scores
 
-    return class_names[idx], probs[0][idx].item()
+
+if __name__=="__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--data", help="Input data", required=True)
+    parser.add_argument("-m", "--model", help="Which learning model to use", required=True)
+    parser.add_argument("-nc", "--new_check", help="Adds a new data quality check", required=False)
+    
+    sc = SupervisedClassifier()
+    print(sc.check_data_quality)
+
+    uad = UnsupervisedAnomalyDetection()
+    print(uad)
