@@ -1,21 +1,24 @@
+#!/usr/bin/env python3
+
 import argparse
-import pandas as pd
+import json
 
 class Learning:
     def __init__(self):
-        return
+        self.quality_features = "files/data_quality_features.json"
     
-    def make_quality_features(df):
-        features = pd.DataFrame(index=df.index)
-        # fraction of missing values in the row
-        features["missing_rate"] = df.isnull().mean(axis=1)
-        # number of out‑of‑range values (example: age between 0 and 120)
-        if "age" in df.columns:
-            features["age_outlier"] = ((df["age"] < 0) | (df["age"] > 120)).astype(int)
-        # add more rules as needed
+    def make_quality_features(self, df, new_check=None):
+        if new_check:
+            with open(self.quality_features, 'w') as dqc:
+                checks = json.load(dqc)
+                checks.get('data_quality_checks',[]).append(new_check)
+            json.dump(checks)
+        with open(self.quality_features, 'r') as qf:
+            quality_features = json.load(qf)
+        features = quality_features.get('data_quality_checks',[])
         return features
     
-    def get_model(self, model):
+    def get_model(self, features, model):
         if model.lower() in ['supervised classifier','sc']:
             from models.supervised_classifier import SupervisedClassifier
             return 'supervised_classifier'
@@ -32,4 +35,4 @@ if __name__=="__main__":
 
     learning = Learning()
     features = learning.make_quality_features(args.new_check)
-    model = learning.get_model(args.model)
+    model = learning.get_model(features, args.model)
