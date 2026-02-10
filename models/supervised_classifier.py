@@ -2,35 +2,38 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 import pandas as pd
+import json
 
 class SupervisedClassifier:
-    def __init__(self, data):
-        self.data = data
-        
-    # def make_quality_features(df):
-    #     features = pd.DataFrame(index=df.index)
-    #     # fraction of missing values in the row
-    #     features["missing_rate"] = df.isnull().mean(axis=1)
-    #     # number of out‑of‑range values (example: age between 0 and 120)
-    #     if "age" in df.columns:
-    #         features["age_outlier"] = ((df["age"] < 0) | (df["age"] > 120)).astype(int)
-    #     # add more rules as needed
-    #     return features
+    def __init__(self, features):
+        self.data_quality_features = features
 
-    X = make_quality_features(df)  # your features
-    y = df["is_bad"]               # 0/1 labels you defined
+    def make_quality_features(self, new_check=None):
+        if new_check:
+            with open(self.quality_features, 'w') as dqc:
+                checks = json.load(dqc)
+                checks.get('data_quality_checks',[]).append(new_check)
+            json.dump(checks)
+        with open(self.data_quality_features, 'r') as qf:
+            quality_features = json.load(qf)
+        features = quality_features.get('data_quality_checks',[])
+        return features
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    def train_and_evaluate_model(self, df, new_check):
+        X = self.make_quality_features(new_check)  # your features
+        y = df["is_bad"]               # 0/1 labels you defined
 
-    model = RandomForestClassifier()
-    model.fit(X_train, y_train)
-    preds = model.predict(X_test)
-    print(classification_report(y_test, preds))
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+        model = RandomForestClassifier()
+        model.fit(X_train, y_train)
+        preds = model.predict(X_test)
+        print(classification_report(y_test, preds))
 
     def check_data_quality(df, model, feature_func):
         X = feature_func(df)
         scores = model.predict_proba(X)[:, 1]  # probability of being bad
         return scores
 
-    quality_scores = check_data_quality(new_df, model, make_quality_features)
-    new_df["quality_score"] = quality_scores
+    # quality_scores = check_data_quality(new_df, model, make_quality_features)
+    # new_df["quality_score"] = quality_scores

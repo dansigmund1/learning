@@ -1,27 +1,25 @@
 #!/usr/bin/env python3
 
 import argparse
-import json
+import pandas as pd
 
 class Learning:
-    def __init__(self):
+    def __init__(self, data):
         self.quality_features = "files/data_quality_features.json"
+        self.data = data
     
-    def make_quality_features(self, df, new_check=None):
-        if new_check:
-            with open(self.quality_features, 'w') as dqc:
-                checks = json.load(dqc)
-                checks.get('data_quality_checks',[]).append(new_check)
-            json.dump(checks)
-        with open(self.quality_features, 'r') as qf:
-            quality_features = json.load(qf)
-        features = quality_features.get('data_quality_checks',[])
-        return features
+    def read_data_into_df(self):
+        df = pd.read_csv(self.data, sep="|")
+        df["is_bad"] = 0
+        return df
     
-    def get_model(self, features, model):
+    def get_model(self, df, model, new_check):
         if model.lower() in ['supervised classifier','sc']:
             from models.supervised_classifier import SupervisedClassifier
-            return 'supervised_classifier'
+            sc = SupervisedClassifier(self.quality_features)
+            model = sc.train_and_evaluate_model(df, new_check)
+            scores = sc.check_data_quality(model, self.quality_features)
+            return scores
         elif model.lower() in ['unsupervised anomaly detection','uad']:
             from models.unsupervised_anomaly_detection import UnsupervisedAnomalyDetection
             return 'unsupervised_anomaly_detection'
@@ -33,6 +31,6 @@ if __name__=="__main__":
     parser.add_argument("-nc", "--new_check", help="Adds a new data quality check", required=False)
     args = parser.parse_args()
 
-    learning = Learning()
-    features = learning.make_quality_features(args.new_check)
-    model = learning.get_model(features, args.model)
+    learning = Learning(args.data)
+    df = learning.read_data_into_df()
+    model = learning.get_model(df, args.model, args.new_check)
